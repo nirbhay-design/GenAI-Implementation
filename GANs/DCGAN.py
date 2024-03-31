@@ -119,7 +119,7 @@ def train(netG, netD, optG, optD, dataloader, lossfunction, epochs, device):
     return netG, netD
 
 def dataset():
-    train_data = torchvision.datasets.MNIST('./', train=True, download=True, transform=transforms.ToTensor())
+    train_data = torchvision.datasets.MNIST('./', train=True, download=True, transform= transforms.Compose([transforms.Resize((64,64)), transforms.ToTensor()]))
     train_loader = torch.utils.data.DataLoader(
         train_data,
         batch_size=32,
