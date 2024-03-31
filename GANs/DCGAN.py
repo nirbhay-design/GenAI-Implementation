@@ -84,7 +84,7 @@ def train(netG, netD, optG, optD, dataloader, lossfunction, epochs, device):
             data = data.to(device)
 
             # discriminator loss min -(log(D(x)) + log(1 - D(G(z))))
-            z = torch.randn(data.shape[0], 100)
+            z = torch.randn(data.shape[0], 100).to(device)
             fake_data = netG(z)
             disc_real = netD(data)
             disc_fake = netD(fake_data.detach())
