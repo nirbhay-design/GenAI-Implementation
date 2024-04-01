@@ -92,9 +92,10 @@ def train(netG, netD, optG, optD, dataloader, lossfunction, epochs, device):
 
             # discriminator loss min -(log(D(x)) + log(1 - D(G(z))))
             z = torch.randn(data.shape[0], 100).to(device)
-            fake_data = netG(z)
+            with torch.no_grad():
+                fake_data = netG(z)
             disc_real = netD(data)
-            disc_fake = netD(fake_data.detach())
+            disc_fake = netD(fake_data)
 
             real_labels = torch.ones_like(disc_real)
             fake_labels = torch.zeros_like(disc_fake)
@@ -130,7 +131,7 @@ def train(netG, netD, optG, optD, dataloader, lossfunction, epochs, device):
 def dataset():
     transformations = transforms.Compose([
         transforms.Resize((64,64)), 
-        transforms.ToTensor(),
+        transforms.ToTensor(), # makes the tensor between 0 to 1
         transforms.Normalize([0.5], [0.5])
     ])
     train_data = torchvision.datasets.MNIST('../dataset', train=True, download=True, transform = transformations)
