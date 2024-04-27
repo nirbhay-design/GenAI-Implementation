@@ -5,25 +5,35 @@ import torchvision
 import torchvision.transforms as transforms 
 import torch.optim as optim 
 
+def progress(current, total, **kwargs):
+    progress_percent = (current * 50 / total)
+    progress_percent_int = int(progress_percent)
+    data_ = ""
+    for meter, data in kwargs.items():
+        data_ += f"{meter}: {round(data,2)}|"
+    print(f" |{chr(9608)* progress_percent_int}{' '*(50-progress_percent_int)}|{current}/{total}|{data_}",end='\r')
+    if (current == total):
+        print()
+
 class Generator(nn.Module):
     def __init__(self, z_dim, channels=3):
         super().__init__()
         self.gen = nn.Sequential(
             nn.ConvTranspose2d(z_dim, 1024, 4, 1, 0),
             nn.BatchNorm2d(1024),
-            nn.LeakyReLU(0.2),
+            nn.PReLU(1024),
 
             nn.ConvTranspose2d(1024, 512, 4, 2, 1),
             nn.BatchNorm2d(512),
-            nn.LeakyReLU(0.2),
+            nn.PReLU(512),
 
             nn.ConvTranspose2d(512, 256, 4, 2, 1),
             nn.BatchNorm2d(256),
-            nn.LeakyReLU(0.2),
+            nn.PReLU(256),
 
             nn.ConvTranspose2d(256, 128, 4, 2, 1),
             nn.BatchNorm2d(128),
-            nn.LeakyReLU(0.2),
+            nn.PReLU(128),
 
             nn.ConvTranspose2d(128, channels, 4, 2, 1),
             nn.Tanh()
@@ -65,8 +75,8 @@ class Discriminator(nn.Module):
 def essentials():
     netG = Generator(100, 1)
     netD = Discriminator(1) 
-    optG = optim.Adam(params = netG.parameters(), lr = 0.0002)
-    optD = optim.Adam(params = netD.parameters(), lr = 0.0002)
+    optG = optim.Adam(params = netG.parameters(), lr = 0.001)
+    optD = optim.Adam(params = netD.parameters(), lr = 0.001)
     return netG, netD, optG, optD 
 
 def train(netG, netD, optG, optD, dataloader, lossfunction, epochs, device):
@@ -84,7 +94,9 @@ def train(netG, netD, optG, optD, dataloader, lossfunction, epochs, device):
             data = data.to(device)
 
             # discriminator loss min -(log(D(x)) + log(1 - D(G(z))))
-            z = torch.randn(data.shape[0], 100).to(device)
+            optD.zero_grad()
+
+            z = torch.randn(data.shape[0], 100, device=device)
             fake_data = netG(z)
             disc_real = netD(data)
             disc_fake = netD(fake_data.detach())
@@ -92,14 +104,12 @@ def train(netG, netD, optG, optD, dataloader, lossfunction, epochs, device):
             real_labels = torch.ones_like(disc_real)
             fake_labels = torch.zeros_like(disc_fake)
 
-            optD.zero_grad()
-
             loss_disc_real = lossfunction(disc_real, real_labels)
-            loss_disc_real.backward()
-
             loss_disc_fake = lossfunction(disc_fake, fake_labels)
-            loss_disc_fake.backward()
 
+            loss_d = loss_disc_fake + loss_disc_real
+
+            loss_d.backward()
             optD.step()
 
             # generator loss min log(1 - D(G(z))) -> max log(D(G(z))) -> min -log(D(G(z)))
@@ -108,18 +118,25 @@ def train(netG, netD, optG, optD, dataloader, lossfunction, epochs, device):
             gen_loss = lossfunction(dis_gen_fake, dis_gen_real_labels)
 
             optG.zero_grad()
-            gen_loss.backward()
+            gen_loss.backward() 
             optG.step()
 
-            genloss += gen_loss / (len_data * data.shape[0])
-            discloss += (loss_disc_fake + loss_disc_real) / (len_data * data.shape[0])
+            genloss += (gen_loss / len_data)
+            discloss += (loss_d / len_data)
+
+            progress(idx+1, len_data, BGL=float(gen_loss), BDL=float(loss_d), GL = float(genloss), DL = float(discloss))
         
         print(f"epoch: [{epoch}/{epochs}], genloss: {genloss:.3f}, discloss: {discloss:.3f}")
 
     return netG, netD
 
 def dataset():
-    train_data = torchvision.datasets.MNIST('./', train=True, download=True, transform= transforms.Compose([transforms.Resize((64,64)), transforms.ToTensor()]))
+    transformations = transforms.Compose([
+        transforms.Resize((64,64)), 
+        transforms.ToTensor(), # makes the tensor between 0 to 1
+        transforms.Normalize([0.5], [0.5])
+    ])
+    train_data = torchvision.datasets.MNIST('../dataset', train=True, download=True, transform = transformations)
     train_loader = torch.utils.data.DataLoader(
         train_data,
         batch_size=32,
