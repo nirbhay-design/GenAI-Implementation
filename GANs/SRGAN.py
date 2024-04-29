@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torchvision 
 import torchvision.transforms as transforms 
 import torch.optim as optim 
+from utils import progress
 
 class ConvResBLock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride):
@@ -81,22 +82,125 @@ class Generator(nn.Module):
 
 
 class ConvBlock(nn.Module):
-    def __init__(self):
+    def __init__(self, in_channels, out_channels, kernel_size, stride):
         super().__init__()
+        self.conv_block = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size, stride, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.LeakyReLU(0.2)
+        )
 
     def forward(self, x):
-        pass 
+        return self.conv_block(x)
 
 class Discriminator(nn.Module):
-    def __init__(self):
+    def __init__(self, in_channels, feature_dims, strides):
         super().__init__()
 
-    def forward(self, x):
-        pass 
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channels, 64, kernel_size=3, stride=1),
+            nn.LeakyReLU(0.2)
+        )
 
+        num_conv_blocks = len(feature_dims)
+
+        self.conv_blocks = nn.ModuleList()
+
+        cur_channels = 64
+        for i in range(num_conv_blocks):
+            self.conv_blocks.append(
+                ConvBlock(cur_channels, feature_dims[i], kernel_size=3, stride=strides[i])
+            )
+            cur_channels = feature_dims[i]
+
+        self.aap = nn.AdaptiveAvgPool2d(output_size=(1,1))
+        self.flatten = nn.Flatten(1)
+        self.linear_layers = nn.Sequential(
+            nn.Linear(cur_channels, 1024),
+            nn.LeakyReLU(0.2),
+            nn.Linear(1024, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        x1 = self.conv1(x)
+        for layers in self.conv_blocks:
+            x1 = layers(x1)
+        aap_x = self.flatten(self.aap(x1))
+        linear_x = self.linear_layers(aap_x)
+
+        return linear_x
+    
+class VGGLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.vgg = torchvision.models.vgg19(weights="IMAGENET1K_V1").features[:36].eval()
+
+        for params in self.vgg.parameters():
+            params.requires_grad = True
+
+
+        self.mse = nn.MSELoss()
+
+    def forward(self, x1, x2):
+        x1_features = self.vgg(x1)
+        x2_features = self.vgg(x2)
+
+        return self.mse(x1_features, x2_features)
+    
+def train(netG, netD, optG, optD, dataloader, lossfunction, epochs, device):
+    netG.train()
+    netD.train() 
+
+    netG = netG.to(device)
+    netD = netD.to(device)
+    len_data = len(dataloader)
+
+    for epoch in range(epochs):
+        genloss = 0
+        discloss = 0
+        for idx, (data, _) in enumerate(dataloader):
+            data = data.to(device)
+
+            # discriminator loss min -(log(D(x)) + log(1 - D(G(z))))
+            optD.zero_grad()
+
+            z = torch.randn(data.shape[0], 100, device=device)
+            fake_data = netG(z)
+            disc_real = netD(data)
+            disc_fake = netD(fake_data.detach())
+
+            real_labels = torch.ones_like(disc_real)
+            fake_labels = torch.zeros_like(disc_fake)
+
+            loss_disc_real = lossfunction(disc_real, real_labels)
+            loss_disc_fake = lossfunction(disc_fake, fake_labels)
+
+            loss_d = loss_disc_fake + loss_disc_real
+
+            loss_d.backward()
+            optD.step()
+
+            # generator loss min log(1 - D(G(z))) -> max log(D(G(z))) -> min -log(D(G(z)))
+            dis_gen_fake = netD(fake_data)
+            dis_gen_real_labels = torch.ones_like(dis_gen_fake)
+            gen_loss = lossfunction(dis_gen_fake, dis_gen_real_labels)
+
+            optG.zero_grad()
+            gen_loss.backward() 
+            optG.step()
+
+            genloss += (gen_loss / len_data)
+            discloss += (loss_d / len_data)
+
+            progress(idx+1, len_data, BGL=float(gen_loss), BDL=float(loss_d), GL = float(genloss), DL = float(discloss))
+        
+        print(f"epoch: [{epoch}/{epochs}], genloss: {genloss:.3f}, discloss: {discloss:.3f}")
+
+    return netG, netD
     
 if __name__ == "__main__":
-    crb = Generator(3, num_res_blocks=16)
+    crb = Discriminator(3, [64,128,128,256,256,512,512], [2,1,2,1,2,1,2])
     tsr = torch.rand(1,3,224,224)
     out = crb(tsr)
     print(out.shape)
