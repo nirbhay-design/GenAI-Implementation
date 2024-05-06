@@ -10,6 +10,14 @@
 - [ ] [Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks](https://openaccess.thecvf.com/content_ICCV_2017/papers/Zhu_Unpaired_Image-To-Image_Translation_ICCV_2017_paper.pdf)
 - [ ] [UNSUPERVISED REPRESENTATION LEARNING WITH DEEP CONVOLUTIONAL GENERATIVE ADVERSARIAL NETWORKS](https://arxiv.org/pdf/1511.06434.pdf)
 
+# Helpful Papers 
+
+- [A Large-Scale Study on Regularization and Normalization in GANs](https://arxiv.org/pdf/1807.04720)
+- [Least Squares Generative Adversarial Networks](https://openaccess.thecvf.com/content_ICCV_2017/papers/Mao_Least_Squares_Generative_ICCV_2017_paper.pdf)
+- [CONSISTENCY REGULARIZATION FOR GENERATIVE ADVERSARIAL NETWORKS](https://arxiv.org/pdf/1910.12027)
+- [Self-Attention Generative Adversarial Networks](https://arxiv.org/pdf/1805.08318)
+- [Wasserstein GAN](https://arxiv.org/pdf/1701.07875)
+
 # GAN Hacks
 
 - No sparse gradients (no maxpool, ReLU)
