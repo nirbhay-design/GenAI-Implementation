@@ -148,7 +148,39 @@ class VGGLoss(nn.Module):
 
         return self.mse(x1_features, x2_features)
     
-def train(netG, netD, optG, optD, dataloader, lossfunction, epochs, device):
+class DiscLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.bce = nn.BCELoss()
+
+    def forward(self, disc_real, disc_fake):
+        real_labels = torch.ones_like(disc_real)
+        fake_labels = torch.zeros_like(disc_fake)
+
+        loss_disc_real = self.bce(disc_real, real_labels)
+        loss_disc_fake = self.bce(disc_fake, fake_labels)
+
+        loss_d = loss_disc_fake + loss_disc_real
+
+        return loss_d
+
+class GenLoss(nn.Module):
+    def __init__(self, reconstruction='VGG'):
+        super().__init__()
+        self.bce = nn.BCELoss()
+        if reconstruction == "VGG":
+            self.rec = VGGLoss()
+        else:
+            self.rec = nn.MSELoss()
+
+    def forward(self, dis_gen_fake, x1, x2):
+        dis_gen_real_labels = torch.ones_like(dis_gen_fake)
+        gen_rec = self.rec(x1, x2)
+        loss_gen = self.bce(dis_gen_fake, dis_gen_real_labels) + gen_rec
+        return loss_gen
+
+    
+def train(netG, netD, optG, optD, dataloader, loss_d, loss_g, epochs, device):
     netG.train()
     netD.train() 
 
@@ -163,28 +195,19 @@ def train(netG, netD, optG, optD, dataloader, lossfunction, epochs, device):
             data = data.to(device)
 
             # discriminator loss min -(log(D(x)) + log(1 - D(G(z))))
-            optD.zero_grad()
-
-            z = torch.randn(data.shape[0], 100, device=device)
-            fake_data = netG(z)
+            fake_data = netG(data)
             disc_real = netD(data)
             disc_fake = netD(fake_data.detach())
 
-            real_labels = torch.ones_like(disc_real)
-            fake_labels = torch.zeros_like(disc_fake)
+            loss_d = loss_d(disc_real, disc_fake)
 
-            loss_disc_real = lossfunction(disc_real, real_labels)
-            loss_disc_fake = lossfunction(disc_fake, fake_labels)
-
-            loss_d = loss_disc_fake + loss_disc_real
-
+            optD.zero_grad()
             loss_d.backward()
             optD.step()
 
             # generator loss min log(1 - D(G(z))) -> max log(D(G(z))) -> min -log(D(G(z)))
             dis_gen_fake = netD(fake_data)
-            dis_gen_real_labels = torch.ones_like(dis_gen_fake)
-            gen_loss = lossfunction(dis_gen_fake, dis_gen_real_labels)
+            gen_loss = loss_g(dis_gen_fake, data, fake_data)
 
             optG.zero_grad()
             gen_loss.backward() 
