@@ -127,7 +127,7 @@ def dataset():
         transforms.ToTensor(), # makes the tensor between 0 to 1
         transforms.Normalize([0.5], [0.5])
     ])
-    train_data = torchvision.datasets.MNIST('../dataset', train=True, download=True, transform = transformations)
+    train_data = torchvision.datasets.MNIST('dataset', train=True, download=True, transform = transformations)
     train_loader = torch.utils.data.DataLoader(
         train_data,
         batch_size=32,

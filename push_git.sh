@@ -7,6 +7,8 @@ fi
 
 commit_msg=$1
 
+git pull origin master 
+
 git add .
 
 git commit -m "$commit_msg"
