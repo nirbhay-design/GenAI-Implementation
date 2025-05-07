@@ -7,7 +7,7 @@ fi
 
 commit_msg=$1
 
-git pull origin master 
+git pull origin main 
 
 git add .
 
